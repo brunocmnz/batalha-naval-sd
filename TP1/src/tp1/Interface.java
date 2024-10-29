@@ -34,8 +34,85 @@ import javax.swing.text.MaskFormatter;
  */
 public class Interface extends javax.swing.JFrame {
 
+    private static TCPServer tcpserver;
+    private static TCPClient tcpclient;
+    private static UDPServer udpserver;
+    private static UDPClient udpclient;
+
+    private void sendMenssageUDPserver(String str) {
+        udpserver.sendMessage(str);
+    }
+
+    private void sendMenssageUDPclient(String str) {
+        udpclient.sendMessage(str);
+    }
+
+    private String recebeMensagemUDPclient() {
+        String mensagem = null;
+        do {
+            mensagem = udpclient.mensagem;
+        } while (mensagem == null);
+        udpserver.mensagem = null;
+        return mensagem;
+    }
+
+    private String recebeMensagemUDPserver() {
+        String mensagem = null;
+        do {
+            mensagem = udpserver.mensagem;
+        } while (mensagem == null);
+        udpserver.mensagem = null;
+        return mensagem;
+    }
+
+    private String recebeMensagemTCPclient() {
+        String mensagem = null;
+        do {
+            mensagem = tcpclient.mensagem;
+        } while (mensagem == null);
+        tcpclient.mensagem = null;
+        return mensagem;
+    }
+
+    private String recebeMensagemTCPserver() {
+        String mensagem = null;
+        do {
+            mensagem = tcpserver.mensagem;
+        } while (mensagem == null);
+        tcpserver.mensagem = null;
+        return mensagem;
+    }
+
+    private String recebeMensagem() {
+        switch (tipoComunicacao) {
+            case UDPcliente:
+                return recebeMensagemUDPclient();
+            case UDPserver:
+                return recebeMensagemUDPserver();
+            case TCPclient:
+                return recebeMensagemTCPclient();
+            case TCPserver:
+                return recebeMensagemTCPserver();
+        }
+        return "";
+    }
+
     private enum Comunicacao {
-        TCP, UDP;
+        TCPserver, TCPclient, UDPserver, UDPcliente;
+
+        public Object get() {
+            switch (this) {
+                case TCPclient:
+                    return tcpclient;
+                case TCPserver:
+                    return tcpserver;
+                case UDPcliente:
+                    return udpclient;
+                case UDPserver:
+                    return udpserver;
+            }
+            return null;
+        }
     }
 
     private void reproduzirAudio(String caminho) {
@@ -82,18 +159,18 @@ public class Interface extends javax.swing.JFrame {
         g.drawString(texto, posX, posY);
         g.dispose(); // Libera o contexto grï¿½fico apï¿½s o uso
     }
-    
+
     String[] minhasPosicoes;
 
     String[] posicoesA = {
         "2L60", // 2Q
         "2C53", // 2Q
-        
+
         "3L00", // 3Q
         "3L32", // 3Q
         "3C17", // 3Q
         "3C79", // 3Q
-        
+
         "5L91" // 5Q
     };
 
@@ -126,10 +203,12 @@ public class Interface extends javax.swing.JFrame {
     String[] vetLetras = {"A", "B", "C", "D", "E", "F", "G", "H", "I", "J"};
     Boolean acerto;
     int xMsgAcerto = 230, yMsgAcerto = 520;
-    Comunicacao tipoTransmissao = Comunicacao.TCP;
+    Comunicacao tipoComunicacao = Comunicacao.UDPserver; //LEANDER MUDE AQUI PRA UDPclient
     long enderecoIPlong;
     String enderecoIPString;
     int altura, largura;
+    boolean transmissaoEscolhida = false;
+    boolean meuTurno;
 
     private void inicializaNavios(Quadrado[][] campo, String[] vetPos) {
         minhasPosicoes = vetPos;
@@ -185,8 +264,15 @@ public class Interface extends javax.swing.JFrame {
     }
 
     private Quadrado verificaMeuAcerto(String texto) {
+        sendMenssageUDPserver(texto);
+        String mensagem = recebeMensagem();
+        if (mensagem.equals("1")) {
+            acerto = true;
+        } else {
+            acerto = false;
+        }
         int[] vetPos = verificaPosicaoTiro(texto);
-        acerto = verificaAcertoDoTiro(campoTiro, vetPos);
+//        acerto = verificaAcertoDoTiro(campoTiro, vetPos);
         int linha = vetPos[0], coluna = vetPos[1];
         if (linha >= 0 && linha < 10 && coluna >= 0 && coluna < 10) {
             return campoTiro[vetPos[0]][vetPos[1]];
@@ -200,23 +286,23 @@ public class Interface extends javax.swing.JFrame {
         }
         return false;
     }
-    
-    private boolean verificaAcertoPorCodigo(String input){
+
+    private boolean verificaAcertoPorCodigo(String input) {
         for (int i = 0; i < minhasPosicoes.length; i++) {
             String codPos = minhasPosicoes[i];
             int coordLinAT = codPos.charAt(2) - '0';
             int coordColAT = codPos.charAt(3) - '0';
-            int[]pos = verificaPosicaoTiro(input);
+            int[] pos = verificaPosicaoTiro(input);
             int coordLinIN = pos[0];
             int coordColIN = pos[1];
             if (coordLinIN == coordLinAT && coordColIN == coordColAT) {
                 return true;    //linha e coluna iguais
-            }else if(coordLinIN == coordLinAT){     //linha igual
+            } else if (coordLinIN == coordLinAT) {     //linha igual
                 int limite = coordColAT + (codPos.charAt(0) - '0');
                 if (coordColIN >= coordColAT && coordColIN < limite) {
                     return true;
                 }
-            }else if(coordColIN == coordColAT){     //coluna igual
+            } else if (coordColIN == coordColAT) {     //coluna igual
                 int limite = coordLinAT + (codPos.charAt(0) - '0');
                 if (coordLinIN >= coordLinAT && coordLinIN < limite) {
                     return true;
@@ -226,13 +312,38 @@ public class Interface extends javax.swing.JFrame {
         return false;
     }
 
+    public static Interface criaInterface(UDPClient udpclient) {
+        return new Interface(Comunicacao.UDPcliente, false);
+    }
+
+    public static Interface criaInterface(UDPServer udpserver) {
+        return new Interface(Comunicacao.UDPserver, true);
+    }
+
+    public static Interface criaInterface(TCPClient tcpclient) {
+        return new Interface(Comunicacao.TCPclient, false);
+    }
+
+    public static Interface criaInterface(TCPServer tcpserver) {
+        return new Interface(Comunicacao.TCPserver, true);
+    }
+
+    //########################################
+    //########################################
+    //########################################
     /**
      * Creates new form Interface
      */
-    public Interface() {
+    private Interface(Comunicacao tipoComunicacao, boolean meuTurno) {
+        
+        this.meuTurno = meuTurno;
+        this.tipoComunicacao = tipoComunicacao;
         altura = getHeight();
         largura = getWidth();
         initComponents();
+        jLabel2.setText("Tipo de Conexão");
+        jLabel1.setText("IP para conexão");
+        jLabel3.setText("Batalha Naval Com Conexão TCP");
         // Centraliza a janela na tela
         this.setLocationRelativeTo(null);
 
@@ -256,30 +367,17 @@ public class Interface extends javax.swing.JFrame {
             }
         }
 
-        inicializaNavios(meuCampo, posicoesA);
-//        inicializaNavios(campoTiro, posicoesB);
+        switch (this.tipoComunicacao) {
+            case TCPclient:
+            case UDPcliente:
+                inicializaNavios(meuCampo, posicoesA);
+                break;
+            case TCPserver:
+            case UDPserver:
+                inicializaNavios(meuCampo, posicoesB);
+                break;
+        }
 
-//        meuCampo[0][0].cor = NAVIO;
-//        meuCampo[0][1].cor = NAVIO;   //-----------
-//        meuCampo[0][4].cor = NAVIO;
-//        meuCampo[0][5].cor = NAVIO;
-//        meuCampo[0][6].cor = NAVIO;   //-----------
-//        meuCampo[0][8].cor = NAVIO;
-//        meuCampo[0][9].cor = NAVIO;   //-----------
-//        meuCampo[2][3].cor = NAVIO;
-//        meuCampo[2][4].cor = NAVIO;
-//        meuCampo[2][5].cor = NAVIO;
-//        meuCampo[2][6].cor = NAVIO;
-//        meuCampo[2][7].cor = NAVIO;   //-----------
-//        meuCampo[6][4].cor = NAVIO;
-//        meuCampo[6][5].cor = NAVIO;
-//        meuCampo[6][6].cor = NAVIO;   //-----------
-//        meuCampo[7][0].cor = NAVIO;
-//        meuCampo[8][0].cor = NAVIO;
-//        meuCampo[9][0].cor = NAVIO;   //-----------
-//        meuCampo[7][8].cor = NAVIO;
-//        meuCampo[8][8].cor = NAVIO;
-//        meuCampo[9][8].cor = NAVIO;   //-----------
         this.setTitle("Batalha Naval");
 
         ActionListener acao = new ActionListener() {
@@ -288,21 +386,29 @@ public class Interface extends javax.swing.JFrame {
                 jButton1ActionPerformed(evt);
             }
         };
+        
+        ActionListener acao2 = new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent evt) {
+                jButton2ActionPerformed(evt);
+            }
+        };
 
 // Adiciona o listener ao botï¿½o e ao campo de texto
         jFormattedTextField1.addActionListener(acao); // Ao pressionar Enter no campo de texto
+        jFormattedTextField1.addActionListener(acao2); // Ao pressionar Enter no campo de texto
 
         // Adiciona ActionListener para os RadioButtons
         jRadioButton2.addActionListener(new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent e) {
-                jRadioButton2ActionPerformed(e);  // Chama a função correspondente
+                jRadioButton2ActionPerformed(e);  // Chama a funï¿½ï¿½o correspondente
             }
         });
         jRadioButton3.addActionListener(new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent e) {
-                jRadioButton3ActionPerformed(e);  // Chama a função correspondente
+                jRadioButton3ActionPerformed(e);  // Chama a funï¿½ï¿½o correspondente
             }
         });
 
@@ -319,11 +425,11 @@ public class Interface extends javax.swing.JFrame {
             }
         });
 
-// Adiciona o KeyListener para validação
+// Adiciona o KeyListener para validaï¿½ï¿½o
         jFormattedTextField2.addKeyListener(new java.awt.event.KeyAdapter() {
             public void keyReleased(java.awt.event.KeyEvent evt) {
                 String texto = jFormattedTextField2.getText();
-                // Remove espaços e formata os octetos
+                // Remove espaï¿½os e formata os octetos
                 texto = texto.replace(" ", "");
                 String[] octets = texto.split("\\.");
 
@@ -333,9 +439,9 @@ public class Interface extends javax.swing.JFrame {
                         try {
                             int value = Integer.parseInt(octets[i]);
                             if (value < 0 || value > 255) {
-                                // Se o octeto for inválido, exibe uma mensagem
+                                // Se o octeto for invï¿½lido, exibe uma mensagem
                                 JOptionPane.showMessageDialog(null, "Cada octeto deve ser entre 0 e 255.");
-                                // Reinicia o campo ou reverte a última entrada válida
+                                // Reinicia o campo ou reverte a ï¿½ltima entrada vï¿½lida
                                 int numDig = texto.length();
                                 System.out.println(texto);
                                 System.out.println("Tam: " + numDig);
@@ -350,11 +456,11 @@ public class Interface extends javax.swing.JFrame {
                                     }
                                     novoTexto = novoTexto.substring(0, novoTexto.length() - 1);
                                 } while (retira > 0);
-                                jFormattedTextField2.setText(novoTexto); // Limpa o campo ou pode colocar um valor anterior válido;
+                                jFormattedTextField2.setText(novoTexto); // Limpa o campo ou pode colocar um valor anterior vï¿½lido;
                                 break;
                             }
                         } catch (NumberFormatException e) {
-                            // Se ocorrer um erro de formato, não faz nada
+                            // Se ocorrer um erro de formato, nï¿½o faz nada
                             break;
                         }
                     }
@@ -449,7 +555,7 @@ public class Interface extends javax.swing.JFrame {
     public static long ipToLong(String ipAddress) {
         String[] octets = ipAddress.split("\\.");
         if (octets.length != 4) {
-            throw new IllegalArgumentException("Endereço IP inválido: " + ipAddress);
+            throw new IllegalArgumentException("Endereï¿½o IP invï¿½lido: " + ipAddress);
         }
         long result = 0;
         for (int i = 0; i < 4; i++) {
@@ -458,7 +564,7 @@ public class Interface extends javax.swing.JFrame {
                 System.out.println("Octeto fora do intervalo: " + octet);
                 return -1;
             }
-            result = (result << 8) | octet; // Desloca à esquerda e adiciona o octeto
+            result = (result << 8) | octet; // Desloca ï¿½ esquerda e adiciona o octeto
         }
         return result;
     }
@@ -510,11 +616,11 @@ public class Interface extends javax.swing.JFrame {
             }
         });
 
-        jLabel2.setText("Tipo de Conexão");
+        jLabel2.setText("Tipo de Conexï¿½o");
 
-        jLabel1.setText("IP para conexão");
+        jLabel1.setText("IP para conexï¿½o");
 
-        jLabel3.setText("Batalha Naval Com Conexão TCP");
+        jLabel3.setText("Batalha Naval Com Conexï¿½o TCP");
 
         jLabel4.setText("Coordenada (Ex: A5)");
 
@@ -626,43 +732,61 @@ public class Interface extends javax.swing.JFrame {
 
     private void jRadioButton3ActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_jRadioButton3ActionPerformed
         // TODO add your handling code here:
-        tipoTransmissao = Comunicacao.UDP;
-        jLabel3.setText("Batalha Naval Com Conexão UDP");
+        if (transmissaoEscolhida == false) {
+            tipoComunicacao = Comunicacao.UDPserver; //LEANDER MUDE AQUI PARA UDPclient
+        }
+        jLabel3.setText("Batalha Naval Com Conexï¿½o UDP");
     }//GEN-LAST:event_jRadioButton3ActionPerformed
 
     private void jButton2ActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_jButton2ActionPerformed
         // TODO add your handling code here:
+        //SALVAR
+        String ip = jButton2.getText();
+        switch (tipoComunicacao) {
+            case UDPcliente:
+                udpclient = new UDPClient(ip);
+                break;
+            case UDPserver:
+                udpserver = new UDPServer();
+                break;
+            case TCPclient:
+                tcpclient = new TCPClient(ip);
+                break;
+            case TCPserver:
+                tcpserver = new TCPServer();
+                break;
+                
+            default:
+                throw new AssertionError();
+        }
+        
     }//GEN-LAST:event_jButton2ActionPerformed
 
     private void jButton1ActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_jButton1ActionPerformed
         // TODO add your handling code here:
-        String texto = jFormattedTextField1.getText();
-        Quadrado quadTiro = null;
-        switch (tipoTransmissao) {
-            case TCP:
-                quadTiro = verificaMeuAcerto(texto); //Verifica meu acerto e marca no meu mapa do adversario        
-                break;
-            case UDP:
-                quadTiro = verificaAcertoAdversario(texto);
-                break;
-        }
-        if (verificaAcertoPorCodigo(texto)) {                 //Acerto
-            if (quadTiro != null) {
-                if (quadTiro.cor != ACERTO) {
-                    reproduzirAudio("src/acerto.wav"); // Substitua com o caminho do seu arquivo .wav
-                } else {
-                    acerto = false;
+        if (meuTurno) {
+            String texto = jFormattedTextField1.getText();
+            Quadrado quadTiro = null;
+            if (verificaAcertoPorCodigo(texto)) {                 //Acerto
+                if (quadTiro != null) {
+                    if (quadTiro.cor != ACERTO) {
+                        reproduzirAudio("src/acerto.wav"); // Substitua com o caminho do seu arquivo .wav
+                    } else {
+                        acerto = false;
+                        reproduzirAudio("src/erro.wav"); // Substitua com o caminho do seu arquivo .wav
+                    }
+                    quadTiro.cor = ACERTO;
+                }
+            } else {                      //Erro
+                if (quadTiro != null && quadTiro.cor != ERRO) {
+                    quadTiro.cor = ERRO;
+                    meuTurno = false;
+                    sendMenssageUDPserver("perdi");
                     reproduzirAudio("src/erro.wav"); // Substitua com o caminho do seu arquivo .wav
                 }
-                quadTiro.cor = ACERTO;
             }
-        } else {                      //Erro
-            if (quadTiro != null && quadTiro.cor != ERRO) {
-                quadTiro.cor = ERRO;
-                reproduzirAudio("src/erro.wav"); // Substitua com o caminho do seu arquivo .wav
-            }
+            this.repaint();
         }
-        this.repaint();
     }//GEN-LAST:event_jButton1ActionPerformed
 
     private void jFormattedTextField1ActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_jFormattedTextField1ActionPerformed
@@ -671,8 +795,10 @@ public class Interface extends javax.swing.JFrame {
 
     private void jRadioButton2ActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_jRadioButton2ActionPerformed
         // TODO add your handling code here:
-        tipoTransmissao = Comunicacao.TCP;
-        jLabel3.setText("Batalha Naval Com Conexão TCP");
+        if (transmissaoEscolhida == false) {
+            tipoComunicacao = Comunicacao.TCPserver; //LEANDER MUDE AQUI PARA TCPclient
+        }
+        jLabel3.setText("Batalha Naval Com Conexï¿½o TCP");
     }//GEN-LAST:event_jRadioButton2ActionPerformed
 
     private void jFormattedTextField2ActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_jFormattedTextField2ActionPerformed
@@ -683,40 +809,40 @@ public class Interface extends javax.swing.JFrame {
         System.out.println("IP string: " + enderecoIPString);
     }//GEN-LAST:event_jFormattedTextField2ActionPerformed
 
-    /**
-     * @param args the command line arguments
-     */
-    public static void main(String args[]) {
-        /* Set the Nimbus look and feel */
-        //<editor-fold defaultstate="collapsed" desc=" Look and feel setting code (optional) ">
-        /* If Nimbus (introduced in Java SE 6) is not available, stay with the default look and feel.
-         * For details see http://download.oracle.com/javase/tutorial/uiswing/lookandfeel/plaf.html 
-         */
-        try {
-            for (javax.swing.UIManager.LookAndFeelInfo info : javax.swing.UIManager.getInstalledLookAndFeels()) {
-                if ("Nimbus".equals(info.getName())) {
-                    javax.swing.UIManager.setLookAndFeel(info.getClassName());
-                    break;
-                }
-            }
-        } catch (ClassNotFoundException ex) {
-            java.util.logging.Logger.getLogger(Interface.class.getName()).log(java.util.logging.Level.SEVERE, null, ex);
-        } catch (InstantiationException ex) {
-            java.util.logging.Logger.getLogger(Interface.class.getName()).log(java.util.logging.Level.SEVERE, null, ex);
-        } catch (IllegalAccessException ex) {
-            java.util.logging.Logger.getLogger(Interface.class.getName()).log(java.util.logging.Level.SEVERE, null, ex);
-        } catch (javax.swing.UnsupportedLookAndFeelException ex) {
-            java.util.logging.Logger.getLogger(Interface.class.getName()).log(java.util.logging.Level.SEVERE, null, ex);
-        }
-        //</editor-fold>
-
-        /* Create and display the form */
-        java.awt.EventQueue.invokeLater(new Runnable() {
-            public void run() {
-                new Interface().setVisible(true);
-            }
-        });
-    }
+//    /**
+//     * @param args the command line arguments
+//     */
+//    public static void main(String args[]) {
+//        /* Set the Nimbus look and feel */
+//        //<editor-fold defaultstate="collapsed" desc=" Look and feel setting code (optional) ">
+//        /* If Nimbus (introduced in Java SE 6) is not available, stay with the default look and feel.
+//         * For details see http://download.oracle.com/javase/tutorial/uiswing/lookandfeel/plaf.html 
+//         */
+//        try {
+//            for (javax.swing.UIManager.LookAndFeelInfo info : javax.swing.UIManager.getInstalledLookAndFeels()) {
+//                if ("Nimbus".equals(info.getName())) {
+//                    javax.swing.UIManager.setLookAndFeel(info.getClassName());
+//                    break;
+//                }
+//            }
+//        } catch (ClassNotFoundException ex) {
+//            java.util.logging.Logger.getLogger(Interface.class.getName()).log(java.util.logging.Level.SEVERE, null, ex);
+//        } catch (InstantiationException ex) {
+//            java.util.logging.Logger.getLogger(Interface.class.getName()).log(java.util.logging.Level.SEVERE, null, ex);
+//        } catch (IllegalAccessException ex) {
+//            java.util.logging.Logger.getLogger(Interface.class.getName()).log(java.util.logging.Level.SEVERE, null, ex);
+//        } catch (javax.swing.UnsupportedLookAndFeelException ex) {
+//            java.util.logging.Logger.getLogger(Interface.class.getName()).log(java.util.logging.Level.SEVERE, null, ex);
+//        }
+//        //</editor-fold>
+//
+//        /* Create and display the form */
+//        java.awt.EventQueue.invokeLater(new Runnable() {
+//            public void run() {
+//                new Interface().setVisible(true);
+//            }
+//        });
+//    }
 
     // Variables declaration - do not modify//GEN-BEGIN:variables
     private javax.swing.ButtonGroup buttonGroup1;
