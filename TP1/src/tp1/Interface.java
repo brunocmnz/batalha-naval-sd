@@ -13,9 +13,12 @@ import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.io.File;
 import java.io.IOException;
-import java.text.ParseException;
+import java.net.InetAddress;
+import java.net.SocketException;
 import java.util.Random;
 import java.util.Scanner;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import javax.sound.sampled.AudioFormat;
 import javax.sound.sampled.AudioInputStream;
 import javax.sound.sampled.AudioSystem;
@@ -24,9 +27,7 @@ import javax.sound.sampled.DataLine;
 import javax.sound.sampled.LineEvent;
 import javax.sound.sampled.LineUnavailableException;
 import javax.sound.sampled.UnsupportedAudioFileException;
-import javax.swing.JFormattedTextField;
 import javax.swing.*;
-import javax.swing.text.MaskFormatter;
 
 /**
  *
@@ -34,85 +35,361 @@ import javax.swing.text.MaskFormatter;
  */
 public class Interface extends javax.swing.JFrame {
 
-    private static TCPServer tcpserver;
-    private static TCPClient tcpclient;
-    private static UDPServer udpserver;
-    private static UDPClient udpclient;
+    static String[] posicoesA = {
+        "1L20", //1Q
+        "1L77", //1Q
+        "1L14", //1Q
+        "2L60", // 2Q
+        "2C53", // 2Q
+        "3L00", // 3Q
+        "3L32", // 3Q
+        "3C17", // 3Q
+        "3C79", // 3Q
+        "5L91" // 5Q
+    };
 
-    private void sendMenssageUDPserver(String str) {
-        udpserver.sendMessage(str);
-    }
+    static String[] posicoesB = {
+        "1L41", //1Q
+        "1L39", //1Q
+        "1L93", //1Q
+        "2L00", //2Q
+        "2L08", //2Q
+        "3L64", //3Q
+        "3L04", //3Q
+        "3C70", //3Q
+        "3C78", //3Q
+        "5L23" //5Q
+    };
 
-    private void sendMenssageUDPclient(String str) {
-        udpclient.sendMessage(str);
-    }
+    static String[] minhasPosicoes;
 
-    private String recebeMensagemUDPclient() {
-        String mensagem = null;
-        do {
-            mensagem = udpclient.mensagem;
-        } while (mensagem == null);
-        udpserver.mensagem = null;
-        return mensagem;
-    }
+    //--------------  Opcoes de cores
+    int VAZIO = 0;
+    static int NAVIO = 1;
+    int ERRO = 2;
+    int ACERTO = 3;
+    int espaco = 250;
+    //-----------------
+    //110 225
+    static Quadrado[][] meuCampo;
+    Quadrado[][] campoTiro;
+    static int h = 10;  //Altura
+    static int w = 10; //Largura
+    int ladoQuad = 20;
+    Color[] cor = {Color.WHITE, Color.gray, Color.BLUE, Color.red};
+    String[] vetLetras = {"A", "B", "C", "D", "E", "F", "G", "H", "I", "J"};
+    Boolean acerto;
+    int xMsgAcerto = 230, yMsgAcerto = 520;
+    Comunicacao tipoComunicacao;
+    static String enderecoIPString = "";//192.168.1.20";//127.0.0.1";
+    int altura, largura;
+    boolean transmissaoEscolhida = false;
+    static boolean meuTurno;
 
-    private String recebeMensagemUDPserver() {
-        String mensagem = null;
-        do {
-            mensagem = udpserver.mensagem;
-        } while (mensagem == null);
-        udpserver.mensagem = null;
-        return mensagem;
-    }
+    static InetAddress clientAddress;
+    static int clientPort;
+    static String mensagemRecebida = "";
+    static String mensagemParaEnviar = "";
 
-    private String recebeMensagemTCPclient() {
-        String mensagem = null;
-        do {
-            mensagem = tcpclient.mensagem;
-        } while (mensagem == null);
-        tcpclient.mensagem = null;
-        return mensagem;
-    }
+    static Thread meuComunicador;
 
-    private String recebeMensagemTCPserver() {
-        String mensagem = null;
-        do {
-            mensagem = tcpserver.mensagem;
-        } while (mensagem == null);
-        tcpserver.mensagem = null;
-        return mensagem;
-    }
-
-    private String recebeMensagem() {
-        switch (tipoComunicacao) {
-            case UDPcliente:
-                return recebeMensagemUDPclient();
-            case UDPserver:
-                return recebeMensagemUDPserver();
-            case TCPclient:
-                return recebeMensagemTCPclient();
-            case TCPserver:
-                return recebeMensagemTCPserver();
+    public static String receberMensagem() {
+        if (meuComunicador instanceof UDPServer) {
+            UDPServer comunicador = (UDPServer) meuComunicador;
+            return comunicador.receberMensagem();
+        } else if (meuComunicador instanceof UDPClient) {
+            UDPClient comunicador = (UDPClient) meuComunicador;
+            return comunicador.receberMensagem();
+        } else if (meuComunicador instanceof TCPServer) {
+            TCPServer comunicador = (TCPServer) meuComunicador;
+            return comunicador.receberMensagem();
+        } else if (meuComunicador instanceof TCPClient) {
+            TCPClient comunicador = (TCPClient) meuComunicador;
+            return comunicador.receberMensagem();
         }
         return "";
     }
 
-    private enum Comunicacao {
-        TCPserver, TCPclient, UDPserver, UDPcliente;
-
-        public Object get() {
-            switch (this) {
-                case TCPclient:
-                    return tcpclient;
-                case TCPserver:
-                    return tcpserver;
-                case UDPcliente:
-                    return udpclient;
-                case UDPserver:
-                    return udpserver;
-            }
-            return null;
+    public static void enviarMensagem(String mensagem) {
+        if (meuComunicador == null) {
+            System.out.println("Erro: Comunicador não inicializado.");
+            return;
         }
+
+        if (meuComunicador instanceof UDPServer) {
+            UDPServer comunicador = (UDPServer) meuComunicador;
+            comunicador.enviarMensagem(mensagem);
+        } else if (meuComunicador instanceof UDPClient) {
+            UDPClient comunicador = (UDPClient) meuComunicador;
+            comunicador.enviarMensagem(mensagem);
+        } else if (meuComunicador instanceof TCPServer) {
+            TCPServer comunicador = (TCPServer) meuComunicador;
+            comunicador.enviarMensagem(mensagem);
+        } else if (meuComunicador instanceof TCPClient) {
+            TCPClient comunicador = (TCPClient) meuComunicador;
+            comunicador.enviarMensagem(mensagem);
+        } else {
+            System.out.println("Tipo de comunicador desconhecido.");
+        }
+    }
+
+    public void atualizaQuad(String acerto, Quadrado quad) {
+        if (acerto == "1") {
+            quad.cor = ACERTO;
+        } else if (acerto == "0") {
+            quad.cor = ERRO;
+        }
+        repaint();
+    }
+
+    public void acerto(Quadrado quadTiro) {
+        if (meuTurno) {
+            System.out.println("Acertei.");
+        }
+        if (quadTiro != null) {
+            if (quadTiro.cor != ACERTO) {
+                reproduzirAudio("src/acerto.wav"); // Substitua com o caminho do seu arquivo .wav
+            } else {
+                acerto = false;
+                reproduzirAudio("src/erro.wav"); // Substitua com o caminho do seu arquivo .wav
+            }
+            quadTiro.cor = ACERTO;
+            this.repaint();
+        }
+    }
+
+    public void erro(Quadrado quadTiro) {
+        if (meuTurno) {
+            System.out.println("Errei");
+        }
+        if (quadTiro != null && quadTiro.cor != ERRO) {
+            quadTiro.cor = ERRO;
+            reproduzirAudio("src/erro.wav"); // Substitua com o caminho do seu arquivo .wav
+            this.repaint();
+        }
+        atualizaTurno(false);
+    }
+
+    public void criaComunicacaoUDP() {
+        if (transmissaoEscolhida == false) {
+            transmissaoEscolhida = true;
+            try {
+                // Tenta inicializar o servidor
+                meuComunicador = new UDPServer();
+                System.out.println("Serei Servidor.");
+                receberMensagem();
+                // Inicializa o campo e os navios para o servidor
+                inicializaNavios(meuCampo, posicoesA);
+                repaint();
+                // Aguarda definição de IP se necessário
+                meuTurno = false; // Define o turno inicial como não sendo do servidor
+            } catch (SocketException ex1) {
+                // Se o socket da porta 4872 está em uso, define como cliente
+                try {
+                    meuTurno = true; // Define o turno inicial como sendo do cliente
+                    // Aguarda definição de IP se necessário
+                    while (enderecoIPString.isEmpty());
+                    meuComunicador = new UDPClient(enderecoIPString);
+                    System.out.println("Serei cliente.");
+                    enviarMensagem("Conexão concluída.");
+                    enviarMensagem("Conexão concluída.");
+                    // Inicializa o campo e os navios para o cliente
+                    inicializaNavios(meuCampo, posicoesB);
+                    repaint();
+                } catch (SocketException ex) {
+                    Logger.getLogger(Interface.class.getName()).log(Level.SEVERE, null, ex);
+                }
+            }
+        }
+    }
+
+    public void criaComunicacaoUDP1() {
+        if (transmissaoEscolhida == false) {
+            try {
+                meuComunicador = new UDPServer();
+                System.out.println("Serei Servidor");
+                inicializaNavios(meuCampo, posicoesA);
+                repaint();
+                while (enderecoIPString == "");
+                meuTurno = false;
+                transmissaoEscolhida = true;
+                receberMensagem();
+            } catch (SocketException ex1) {
+                try {
+                    meuTurno = true;
+                    transmissaoEscolhida = true;
+                    while (enderecoIPString == "");
+                    meuComunicador = new UDPClient(enderecoIPString);
+                    System.out.println("Serei cliente.");
+                    enviarMensagem("Conexão concluída.");
+                    inicializaNavios(meuCampo, posicoesB);
+                    repaint();
+                } catch (SocketException ex) {
+                    Logger.getLogger(Interface.class.getName()).log(Level.SEVERE, null, ex);
+                }
+            }
+        }
+    }
+
+//    public static void criaComunicacaoUDP2() {
+//
+//        //tenta servidor ===============================================
+//        try {
+//            DatagramSocket socket = new DatagramSocket(4872); // Porta do servidor
+//            byte[] buffer = new byte[1000];
+//            System.out.println("Serei servidor.");
+//            System.out.println("Servidor iniciado. Aguardando mensagens...");
+//            inicializaNavios(meuCampo, posicoesA);
+//            meuTurno = true;
+//            // Thread para receber mensagens do cliente
+//            new Thread(() -> {
+//                try {
+//                    while (true) {
+//                        DatagramPacket request = new DatagramPacket(buffer, buffer.length);
+//                        socket.receive(request); // Recebe mensagens do cliente
+//
+//                        String newMessage = new String(request.getData(), 0, request.getLength());
+//                        if (newMessage != "") {
+//                            mensagemRecebida = newMessage;
+//                            System.out.println("Consegui:" + newMessage);
+//                        }
+//                        // Armazena o endereço e a porta do cliente
+//                        clientAddress = request.getAddress();
+//                        clientPort = request.getPort();
+//                    }
+//                } catch (IOException e) {
+//                    System.out.println("Erro de E/S: " + e.getMessage());
+//                }
+//            }).start();
+//
+//            // Permite que o servidor também envie mensagens ao cliente
+//            Scanner scanner = new Scanner(System.in);
+//            while (true) {
+//                while (mensagemParaEnviar == "");
+//                String message = mensagemParaEnviar;
+//                mensagemParaEnviar = "";
+//                // Verifica se o cliente foi definido antes de enviar                // Verifica se o cliente foi definido antes de enviar                // Verifica se o cliente foi definido antes de enviar                // Verifica se o cliente foi definido antes de enviar
+//                if (clientAddress != null && clientPort != 0) {
+//                    DatagramPacket packet = new DatagramPacket(message.getBytes(), message.length(),
+//                              clientAddress, clientPort);
+//                    socket.send(packet);
+//                } else {
+//                    System.out.println("Aguardando um cliente para enviar mensagens...");
+//                }
+//            }
+//        } catch (SocketException e) {
+//            System.out.println("Serei cliente: ");
+//            inicializaNavios(meuCampo, posicoesB);
+//            meuTurno = false;
+//        } catch (IOException e) {
+//            System.out.println("Erro de E/S: " + e.getMessage());
+//        } finally {
+//            //tenta cliente ===============================================
+//            try {
+//                final DatagramSocket socket = new DatagramSocket(); // Cria o socket para enviar mensagens
+//                InetAddress serverAddress = InetAddress.getByName("127.0.0.1"); // Usando localhost
+//                int serverPort = 4872; // Porta do servidor
+//                // Thread para receber mensagens do servidor
+//                Thread receiveThread = new Thread(() -> {
+//                    try {
+//                        byte[] buffer = new byte[1000];
+//                        while (true) {
+//                            DatagramPacket reply = new DatagramPacket(buffer, buffer.length);
+//                            socket.receive(reply); // Recebe a mensagem do servidor
+//                            String newMessage = new String(reply.getData(), 0, reply.getLength());
+//                            if (newMessage != "") {
+//                                mensagemRecebida = newMessage;
+//                                System.out.println("Consegui:" + newMessage);
+//                            }
+//                        }
+//                    } catch (IOException e) {
+//                        System.out.println("Erro de E/S: " + e.getMessage());
+//                    }
+//                });
+//                // Inicia a thread de recepção
+//                receiveThread.start();
+//                // Permite que o cliente também envie mensagens ao servidor
+//                Scanner scanner = new Scanner(System.in);
+//                String message = "Comunicação establecida.";
+//                DatagramPacket packet = new DatagramPacket(message.getBytes(), message.length(), serverAddress, serverPort);
+//                socket.send(packet);
+//                System.out.println("Comunicação estabelecida.");
+//                while (true) {
+//                    while (mensagemParaEnviar == "");
+//                    message = mensagemParaEnviar;
+//                    mensagemParaEnviar = "";
+//                    packet = new DatagramPacket(message.getBytes(), message.length(), serverAddress, serverPort);
+//                    socket.send(packet);
+//                }
+//            } catch (SocketException e) {
+//                System.out.println("Erro no Socket: " + e.getMessage());
+//            } catch (IOException e) {
+//                System.out.println("Erro de E/S: " + e.getMessage());
+//            }
+//        }
+//    }
+    public void criaComunicacaoTCP() {
+        if (transmissaoEscolhida == false) {
+//            try {
+//                meuComunicador = new UDPServer();
+//
+//                System.out.println("Serei Servidor");
+//                inicializaNavios(meuCampo, posicoesA);
+//                repaint();
+//                while (enderecoIPString == "");
+//                meuTurno = false;
+//                transmissaoEscolhida = true;
+//                receberMensagem();
+//            } catch (SocketException ex1) {
+//                try {
+//                    meuTurno = true;
+//                    transmissaoEscolhida = true;
+//                    while (enderecoIPString == "");
+//                    meuComunicador = new UDPClient(enderecoIPString);
+//                    System.out.println("Serei cliente.");
+//                    enviarMensagem("Conexão concluída.");
+//                    inicializaNavios(meuCampo, posicoesB);
+//                    repaint();
+//                } catch (SocketException ex) {
+//                    Logger.getLogger(Interface.class.getName()).log(Level.SEVERE, null, ex);
+//                }
+//            }
+//        }
+
+            String serverIP = enderecoIPString;//  "127.0.0.1";
+            transmissaoEscolhida = true;
+//        boolean souCliente = false;
+            try {
+                // tenta servidor ===============================================
+                TCPServer server = new TCPServer();
+                server.startServer();
+                inicializaNavios(meuCampo, posicoesA);
+                repaint();
+                meuTurno = false;
+            } catch (IOException e) {
+                // tenta cliente ===============================================
+                System.out.println("Serei cliente.");
+//            souCliente = true;
+                inicializaNavios(meuCampo, posicoesB);
+                repaint();
+                meuTurno = true;
+//        }
+//
+//        if (souCliente) {
+                try {
+                    final TCPClient client;
+                    client = new TCPClient(serverIP);
+                    client.enviarMensagem("Comunicação estabelecida.");
+                } catch (IOException ex) {
+                    Logger.getLogger(Interface.class.getName()).log(Level.SEVERE, null, ex);
+                }
+            }
+        }
+    }
+
+    //======================================================
+    public enum Comunicacao {
+        TCP, UDP; //TCPserver, TCPclient, UDPserver, UDPclient;
     }
 
     private void reproduzirAudio(String caminho) {
@@ -160,57 +437,7 @@ public class Interface extends javax.swing.JFrame {
         g.dispose(); // Libera o contexto grï¿½fico apï¿½s o uso
     }
 
-    String[] minhasPosicoes;
-
-    String[] posicoesA = {
-        "2L60", // 2Q
-        "2C53", // 2Q
-
-        "3L00", // 3Q
-        "3L32", // 3Q
-        "3C17", // 3Q
-        "3C79", // 3Q
-
-        "5L91" // 5Q
-    };
-
-    String[] posicoesB = {
-        "2L00", //2Q
-        "2L08", //2Q
-
-        "3L64", //3Q
-        "3L04", //3Q
-        "3C70", //3Q
-        "3C78", //3Q
-
-        "5L23" //5Q
-    };
-
-    //--------------  Opcoes de cores
-    int VAZIO = 0;
-    int NAVIO = 1;
-    int ERRO = 2;
-    int ACERTO = 3;
-    int espaco = 250;
-    //-----------------
-    //110 225
-    Quadrado[][] meuCampo;
-    Quadrado[][] campoTiro;
-    static int h = 10;  //Altura
-    static int w = 10; //Largura
-    int ladoQuad = 20;
-    Color[] cor = {Color.WHITE, Color.gray, Color.BLUE, Color.red};
-    String[] vetLetras = {"A", "B", "C", "D", "E", "F", "G", "H", "I", "J"};
-    Boolean acerto;
-    int xMsgAcerto = 230, yMsgAcerto = 520;
-    Comunicacao tipoComunicacao = Comunicacao.UDPserver; //LEANDER MUDE AQUI PRA UDPclient
-    long enderecoIPlong;
-    String enderecoIPString;
-    int altura, largura;
-    boolean transmissaoEscolhida = false;
-    boolean meuTurno;
-
-    private void inicializaNavios(Quadrado[][] campo, String[] vetPos) {
+    private static void inicializaNavios(Quadrado[][] campo, String[] vetPos) {
         minhasPosicoes = vetPos;
         for (int navioAt = 0; navioAt < vetPos.length; navioAt++) {
             String posicao = vetPos[navioAt];
@@ -232,8 +459,11 @@ public class Interface extends javax.swing.JFrame {
     }
 
     private int[] verificaPosicaoTiro(String input) {
-        int coluna = Integer.valueOf(input.substring(1, input.length()));  //pega o numero da coluna
+        System.out.println(input);
+        int coluna = Integer.valueOf(String.valueOf(input.charAt(1)));
+        System.out.println("Coluna: " + coluna);
         String letraLinha = "" + input.charAt(0);   //pega o char da linha
+        System.out.println("Linha: " + letraLinha);
         int linha = -1;
         for (int i = 0; i < vetLetras.length; i++) {
             if (vetLetras[i].toLowerCase().equals(letraLinha.toLowerCase())) {
@@ -263,28 +493,29 @@ public class Interface extends javax.swing.JFrame {
         return null;
     }
 
-    private Quadrado verificaMeuAcerto(String texto) {
-        sendMenssageUDPserver(texto);
-        String mensagem = recebeMensagem();
-        if (mensagem.equals("1")) {
-            acerto = true;
-        } else {
-            acerto = false;
-        }
-        int[] vetPos = verificaPosicaoTiro(texto);
-//        acerto = verificaAcertoDoTiro(campoTiro, vetPos);
-        int linha = vetPos[0], coluna = vetPos[1];
-        if (linha >= 0 && linha < 10 && coluna >= 0 && coluna < 10) {
-            return campoTiro[vetPos[0]][vetPos[1]];
-        }
-        return null;
-    }
-
-    private boolean verificaSeHaNavio(Quadrado quad) {
-        if (quad.cor == NAVIO) {  //se a cor eh cinza, eh navio (pode ser que de problema, por comparar cor)
+    private boolean verificaMeuAcerto(String texto) {
+        enviarMensagem(texto);
+        String mensagem = receberMensagem();
+        if (mensagem.contains("1")) {
             return true;
         }
         return false;
+    }
+
+    private boolean verificaSeHaNavio(Quadrado quad) {
+        if (quad != null && quad.cor == NAVIO) {  //se a cor eh cinza, eh navio (pode ser que de problema, por comparar cor)
+            return true;
+        }
+        return false;
+    }
+
+    public void atualizaTurno(boolean novoTurno) {
+        meuTurno = novoTurno;
+        if (meuTurno) {
+            System.out.println("Meu turno.");
+        } else {
+            System.out.println("Turno do adversario.");
+        }
     }
 
     private boolean verificaAcertoPorCodigo(String input) {
@@ -312,32 +543,16 @@ public class Interface extends javax.swing.JFrame {
         return false;
     }
 
-    public static Interface criaInterface(UDPClient udpclient) {
-        return new Interface(Comunicacao.UDPcliente, false);
-    }
-
-    public static Interface criaInterface(UDPServer udpserver) {
-        return new Interface(Comunicacao.UDPserver, true);
-    }
-
-    public static Interface criaInterface(TCPClient tcpclient) {
-        return new Interface(Comunicacao.TCPclient, false);
-    }
-
-    public static Interface criaInterface(TCPServer tcpserver) {
-        return new Interface(Comunicacao.TCPserver, true);
-    }
-
+//    public static Interface criaInterface(Comunicacao tipoComunicacao) {
+//        return new Interface(tipoComunicacao);
+//    }
     //########################################
     //########################################
     //########################################
     /**
      * Creates new form Interface
      */
-    private Interface(Comunicacao tipoComunicacao, boolean meuTurno) {
-        
-        this.meuTurno = meuTurno;
-        this.tipoComunicacao = tipoComunicacao;
+    public Interface() {
         altura = getHeight();
         largura = getWidth();
         initComponents();
@@ -367,36 +582,29 @@ public class Interface extends javax.swing.JFrame {
             }
         }
 
-        switch (this.tipoComunicacao) {
-            case TCPclient:
-            case UDPcliente:
-                inicializaNavios(meuCampo, posicoesA);
-                break;
-            case TCPserver:
-            case UDPserver:
-                inicializaNavios(meuCampo, posicoesB);
-                break;
-        }
-
         this.setTitle("Batalha Naval");
+        jLabel3.setText("Batalha Naval Com Conexão ___");
 
         ActionListener acao = new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent evt) {
                 jButton1ActionPerformed(evt);
+
             }
         };
-        
+
         ActionListener acao2 = new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent evt) {
                 jButton2ActionPerformed(evt);
+                jButton2.setEnabled(false);
+                jFormattedTextField2.setEnabled(false); // Ao pressionar Enter no campo de texto
             }
         };
 
 // Adiciona o listener ao botï¿½o e ao campo de texto
         jFormattedTextField1.addActionListener(acao); // Ao pressionar Enter no campo de texto
-        jFormattedTextField1.addActionListener(acao2); // Ao pressionar Enter no campo de texto
+        jFormattedTextField2.addActionListener(acao2); // Ao pressionar Enter no campo de texto
 
         // Adiciona ActionListener para os RadioButtons
         jRadioButton2.addActionListener(new ActionListener() {
@@ -411,12 +619,6 @@ public class Interface extends javax.swing.JFrame {
                 jRadioButton3ActionPerformed(e);  // Chama a funï¿½ï¿½o correspondente
             }
         });
-
-        try {
-            jFormattedTextField2.setFormatterFactory(new javax.swing.text.DefaultFormatterFactory(new javax.swing.text.MaskFormatter("###.###.###.###")));
-        } catch (java.text.ParseException ex) {
-            ex.printStackTrace();
-        }
 
 // Adiciona o ActionListener
         jFormattedTextField2.addActionListener(new java.awt.event.ActionListener() {
@@ -477,14 +679,24 @@ public class Interface extends javax.swing.JFrame {
         DesenhaQuadrados(g);
         g.setFont(new Font("Arial", Font.BOLD, 18)); // Define a fonte como Arial, negrito, tamanho 24
         if (acerto == null) {
+            System.out.println("ACERTO EH NULL");
             return;
         }
         if (acerto) {
+            if (meuTurno) {
+                imprimeTextoCentralizado(g, "Acertou, atire novamente!", this.getWidth() / 2, 515);
+            } else {
+                imprimeTextoCentralizado(g, "O oponente acertou!", this.getWidth() / 2, 515);
+            }
 //            g.drawString("Acertou, atire novamente!", xMsgAcerto - 50, yMsgAcerto);
-            imprimeTextoCentralizado(g, "Acertou, atire novamente!", this.getWidth() / 2, 515);
         } else if (acerto == false) {
 //            g.drawString("Errou, perder a vez!", xMsgAcerto - 40, yMsgAcerto);
-            imprimeTextoCentralizado(g, "Errou, perdeu a vez!", this.getWidth() / 2, 515);
+            if (meuTurno) {
+                imprimeTextoCentralizado(g, "O oponente errou, é sua vez!", this.getWidth() / 2, 515);
+            } else {
+                imprimeTextoCentralizado(g, "Errou, perdeu a vez!", this.getWidth() / 2, 515);
+            }
+
         }
     }
 
@@ -552,23 +764,6 @@ public class Interface extends javax.swing.JFrame {
         }
     }
 
-    public static long ipToLong(String ipAddress) {
-        String[] octets = ipAddress.split("\\.");
-        if (octets.length != 4) {
-            throw new IllegalArgumentException("Endereï¿½o IP invï¿½lido: " + ipAddress);
-        }
-        long result = 0;
-        for (int i = 0; i < 4; i++) {
-            int octet = Integer.parseInt(octets[i]);
-            if (octet < 0 || octet > 255) {
-                System.out.println("Octeto fora do intervalo: " + octet);
-                return -1;
-            }
-            result = (result << 8) | octet; // Desloca ï¿½ esquerda e adiciona o octeto
-        }
-        return result;
-    }
-
     /**
      * This method is called from within the constructor to initialize the form.
      * WARNING: Do NOT modify this code. The content of this method is always
@@ -600,7 +795,6 @@ public class Interface extends javax.swing.JFrame {
         setDefaultCloseOperation(javax.swing.WindowConstants.EXIT_ON_CLOSE);
 
         buttonGroup1.add(jRadioButton2);
-        jRadioButton2.setSelected(true);
         jRadioButton2.setText("TCP");
         jRadioButton2.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
@@ -616,11 +810,11 @@ public class Interface extends javax.swing.JFrame {
             }
         });
 
-        jLabel2.setText("Tipo de Conexï¿½o");
+        jLabel2.setText("Tipo de Conexão");
 
-        jLabel1.setText("IP para conexï¿½o");
+        jLabel1.setText("IP para conexão");
 
-        jLabel3.setText("Batalha Naval Com Conexï¿½o TCP");
+        jLabel3.setText("Batalha Naval Com Conexão TCP");
 
         jLabel4.setText("Coordenada (Ex: A5)");
 
@@ -639,7 +833,7 @@ public class Interface extends javax.swing.JFrame {
         });
 
         try {
-            jFormattedTextField1.setFormatterFactory(new javax.swing.text.DefaultFormatterFactory(new javax.swing.text.MaskFormatter("A#")));
+            jFormattedTextField1.setFormatterFactory(new javax.swing.text.DefaultFormatterFactory(new javax.swing.text.MaskFormatter("U#")));
         } catch (java.text.ParseException ex) {
             ex.printStackTrace();
         }
@@ -649,7 +843,7 @@ public class Interface extends javax.swing.JFrame {
             }
         });
 
-        jFormattedTextField2.setFormatterFactory(new javax.swing.text.DefaultFormatterFactory(new javax.swing.text.NumberFormatter(new java.text.DecimalFormat(""))));
+        jFormattedTextField2.setToolTipText("dfd"); // NOI18N
         jFormattedTextField2.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
                 jFormattedTextField2ActionPerformed(evt);
@@ -703,7 +897,7 @@ public class Interface extends javax.swing.JFrame {
                             .addComponent(jLabel2)
                             .addComponent(jLabel1))
                         .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
-                        .addComponent(jRadioButton2))
+                        .addComponent(jRadioButton2, javax.swing.GroupLayout.PREFERRED_SIZE, 28, javax.swing.GroupLayout.PREFERRED_SIZE))
                     .addGroup(javax.swing.GroupLayout.Alignment.TRAILING, layout.createSequentialGroup()
                         .addGap(54, 54, 54)
                         .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
@@ -733,59 +927,103 @@ public class Interface extends javax.swing.JFrame {
     private void jRadioButton3ActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_jRadioButton3ActionPerformed
         // TODO add your handling code here:
         if (transmissaoEscolhida == false) {
-            tipoComunicacao = Comunicacao.UDPserver; //LEANDER MUDE AQUI PARA UDPclient
+            new Thread(() -> {
+                criaComunicacaoUDP();
+            }).start();
+            new Thread(() -> {
+                do {
+                    if (!meuTurno && transmissaoEscolhida) {
+                        System.out.println("Verificando...");
+                        String msg = receberMensagem();
+                        System.out.println(msg);
+                        if (msg.length() < 3 && msg.length() > 1) {// && !msg.isEmpty() && !msg.equals("") && !msg.equals("  ")) {
+                            System.out.println("Checando");
+                            Quadrado quad = verificaAcertoAdversario(msg);
+                            boolean acerto = verificaSeHaNavio(quad);
+                            if (acerto) {
+                                enviarMensagem("1");
+                                acerto(quad);
+                            } else {
+                                enviarMensagem("0");
+                                erro(quad);
+                                atualizaTurno(true);
+                            }
+                        }
+                    }
+                } while (true);
+            }).start();
+            jLabel3.setText("Batalha Naval Com Conexão UDP");
+            jRadioButton3.setSelected(true);
+            jRadioButton3.setEnabled(false);   // Desativa o botão para impedir novos cliques
+            jRadioButton2.setEnabled(false);   // Desativa o botão para impedir novos cliques
+            tipoComunicacao = Comunicacao.UDP;
+            repaint();
         }
-        jLabel3.setText("Batalha Naval Com Conexï¿½o UDP");
     }//GEN-LAST:event_jRadioButton3ActionPerformed
 
     private void jButton2ActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_jButton2ActionPerformed
         // TODO add your handling code here:
         //SALVAR
-        String ip = jButton2.getText();
-        switch (tipoComunicacao) {
-            case UDPcliente:
-                udpclient = new UDPClient(ip);
-                break;
-            case UDPserver:
-                udpserver = new UDPServer();
-                break;
-            case TCPclient:
-                tcpclient = new TCPClient(ip);
-                break;
-            case TCPserver:
-                tcpserver = new TCPServer();
-                break;
-                
-            default:
-                throw new AssertionError();
-        }
-        
+        enderecoIPString = jFormattedTextField2.getText();
+        jButton2.setEnabled(false);
+        jFormattedTextField2.setEnabled(false);
+
     }//GEN-LAST:event_jButton2ActionPerformed
 
     private void jButton1ActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_jButton1ActionPerformed
         // TODO add your handling code here:
+        //ENVIAR
+//        repaint();
         if (meuTurno) {
             String texto = jFormattedTextField1.getText();
-            Quadrado quadTiro = null;
-            if (verificaAcertoPorCodigo(texto)) {                 //Acerto
-                if (quadTiro != null) {
-                    if (quadTiro.cor != ACERTO) {
-                        reproduzirAudio("src/acerto.wav"); // Substitua com o caminho do seu arquivo .wav
+            jFormattedTextField1.setText("");
+            jFormattedTextField1.setCaretPosition(0);
+            System.out.println(texto);
+            if (!texto.equals("  ")) {
+                Quadrado quadTiro = null;
+                acerto = verificaMeuAcerto(texto);
+                int[] vetPos = verificaPosicaoTiro(texto);
+//        acerto = verificaAcertoDoTiro(campoTiro, vetPos);
+                int linha = vetPos[0], coluna = vetPos[1];
+                if (linha >= 0 && linha < 10 && coluna >= 0 && coluna < 10) {
+                    quadTiro = campoTiro[linha][coluna];
+                    final Quadrado quad = quadTiro;
+                    if (acerto) {
+                        acerto(quad);
                     } else {
-                        acerto = false;
-                        reproduzirAudio("src/erro.wav"); // Substitua com o caminho do seu arquivo .wav
+                        new Thread(() -> {
+                            erro(quad);
+                        }).start();
                     }
-                    quadTiro.cor = ACERTO;
                 }
-            } else {                      //Erro
-                if (quadTiro != null && quadTiro.cor != ERRO) {
-                    quadTiro.cor = ERRO;
-                    meuTurno = false;
-                    sendMenssageUDPserver("perdi");
-                    reproduzirAudio("src/erro.wav"); // Substitua com o caminho do seu arquivo .wav
+                if (acerto) {                 //Acerto
+                    System.out.println("Acertei.");
+                } else {                      //Erro
+                    System.out.println("ENTREI NO ERRO");
+                    atualizaTurno(false);
+                    do {
+                        if (!meuTurno && transmissaoEscolhida) {
+                            System.out.println("Verificando...");
+                            String msg = receberMensagem();
+                            System.out.println(msg);
+                            if (msg.length() < 3 && msg.length() > 0) {// && !msg.isEmpty() && !msg.equals("") && !msg.equals("  ")) {
+                                System.out.println("Checando");
+                                Quadrado quad = verificaAcertoAdversario(msg);
+                                boolean acerto = verificaSeHaNavio(quad);
+                                if (acerto) {
+                                    enviarMensagem("1");
+                                    acerto(quadTiro);
+                                } else {
+                                    enviarMensagem("0");
+                                    erro(quadTiro);
+                                    meuTurno = true;
+                                }
+                            }
+                        }
+                    } while (meuTurno == false);
                 }
+
             }
-            this.repaint();
         }
     }//GEN-LAST:event_jButton1ActionPerformed
 
@@ -796,16 +1034,43 @@ public class Interface extends javax.swing.JFrame {
     private void jRadioButton2ActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_jRadioButton2ActionPerformed
         // TODO add your handling code here:
         if (transmissaoEscolhida == false) {
-            tipoComunicacao = Comunicacao.TCPserver; //LEANDER MUDE AQUI PARA TCPclient
+            new Thread(() -> {
+                criaComunicacaoTCP();
+            }).start();
+            new Thread(() -> {
+                do {
+                    if (!meuTurno && transmissaoEscolhida) {
+                        System.out.println("Verificando...");
+                        String msg = receberMensagem();
+                        System.out.println(msg);
+                        if (msg.length() < 3 && msg.length() > 0) {// && !msg.isEmpty() && !msg.equals("") && !msg.equals("  ")) {
+                            System.out.println("Checando");
+                            Quadrado quad = verificaAcertoAdversario(msg);
+                            boolean acerto = verificaSeHaNavio(quad);
+                            if (acerto) {
+                                enviarMensagem("1");
+                                acerto(quad);
+                            } else {
+                                enviarMensagem("0");
+                                erro(quad);
+                                atualizaTurno(true);
+                            }
+                        }
+                    }
+                } while (true);
+            }).start();
+            jRadioButton2.setSelected(true);
+            jRadioButton2.setEnabled(false);   // Desativa o botão para impedir novos cliques
+            jRadioButton3.setEnabled(false);   // Desativa o botão para impedir novos cliques
+            tipoComunicacao = Comunicacao.TCP; //LEANDER MUDE AQUI PARA TCPclient
+            jLabel3.setText("Batalha Naval Com Conexão TCP");
+            repaint();
         }
-        jLabel3.setText("Batalha Naval Com Conexï¿½o TCP");
     }//GEN-LAST:event_jRadioButton2ActionPerformed
 
     private void jFormattedTextField2ActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_jFormattedTextField2ActionPerformed
         // TODO add your handling code here:
         enderecoIPString = jFormattedTextField2.getText();
-        enderecoIPlong = ipToLong(enderecoIPString);
-        System.out.println("IP long: " + enderecoIPlong);
         System.out.println("IP string: " + enderecoIPString);
     }//GEN-LAST:event_jFormattedTextField2ActionPerformed
 

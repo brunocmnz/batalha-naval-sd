@@ -2,49 +2,66 @@ package tp1;
 
 import java.io.*;
 import java.net.*;
+import java.util.Scanner;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
-public class TCPClient implements Runnable {
+public class TCPClient extends Thread{
     private Socket socket;
     private DataOutputStream out;
     private DataInputStream in;
-    String mensagem;
-    int port = 4872;
+    private String mensagem = "";
 
-    public TCPClient(String serverIP) {
-        try {
-            socket = new Socket(serverIP, port);
-        } catch (IOException ex) {
-            Logger.getLogger(TCPClient.class.getName()).log(Level.SEVERE, null, ex);
-        }
+    public String getMessage() {
+        String mensagem = this.mensagem;
+        this.mensagem = "";
+        return mensagem;
+    }
+    
+    public boolean newMessage(){
+        return mensagem!= "";
+    }
+    
+    public TCPClient(String serverIP) throws IOException {
+        socket = new Socket(serverIP, 4872);
+        connect();
     }
 
     public void connect() throws IOException {
-        System.out.println("Conectado ao servidor!");
+        System.out.println("Conectado ao servidor TCP!");
         out = new DataOutputStream(socket.getOutputStream());
         in = new DataInputStream(socket.getInputStream());
 
-        new Thread(this).start(); // Inicia a thread para ouvir mensagens recebidas
+//        new Thread(this).start(); // Inicia a thread para ouvir mensagens recebidas
     }
 
-    public void sendMessage(String message) throws IOException {
+    public void enviarMensagem(String message){
         if (out != null) {
-            out.writeUTF(message);
+            try {
+                out.writeUTF(message);
+            } catch (IOException ex) {
+                Logger.getLogger(TCPClient.class.getName()).log(Level.SEVERE, null, ex);
+            }
         }
     }
     
-    public String receiveMessage() {
+    public String receberMensagem() {
         try {
-            String message;
-            while ((message = in.readLine()) != null) {
-                System.out.println("Amigo: " + message);
+            while (true) {
+                String newmessage = in.readUTF();
+                if (newmessage != "") {
+                    mensagem = newmessage;
+                    System.out.println("IntPrintTCP: " + mensagem);
+                }
+                if (mensagem.equalsIgnoreCase("sair")) {
+                    System.out.println("Cliente desconectou.");
+                    break;
+                }
             }
-            return message;
-        } catch (IOException e) {
-            System.out.println("Erro ao receber mensagens: " + e.getMessage());
+        } catch (IOException ex) {
+            Logger.getLogger(TCPServer.class.getName()).log(Level.SEVERE, null, ex);
         }
-        return null;
+        return "";
     }
 
     public void close() throws IOException {
@@ -55,12 +72,15 @@ public class TCPClient implements Runnable {
     public void run() {
         try {
             while (true) {
-                String message = in.readUTF();
-                if (message.equalsIgnoreCase("sair")) {
+                String newmessage = in.readUTF();
+                if(newmessage != ""){
+                    mensagem = newmessage;
+                    System.out.println("IntPrintTCP: "+mensagem);
+                }
+                if (mensagem.equalsIgnoreCase("sair")) {
                     System.out.println("Servidor desconectou.");
                     break;
                 }
-                System.out.println("Servidor: " + message);
             }
         } catch (IOException e) {
             System.out.println("Erro ao receber mensagem: " + e.getMessage());

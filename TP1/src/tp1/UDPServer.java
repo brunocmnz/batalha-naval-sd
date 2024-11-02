@@ -3,67 +3,111 @@ package tp1;
 import java.net.*;
 import java.io.*;
 import java.util.Scanner;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
-public class UDPServer {
+public class UDPServer extends Thread {
+
     private DatagramSocket socket;
     private InetAddress clientAddress;
     private int clientPort;
-    private final int serverPort = 4872;
-    String mensagem;
+    byte[] buffer;
 
-    public UDPServer() {
+    public UDPServer() throws SocketException {
+        socket = new DatagramSocket(4872); // Porta do servidor
+        buffer = new byte[1000];
+        System.out.println("Servidor iniciado. Aguardando mensagens...");
+    }
+
+    public void enviarMensagem(String message) {
+        if (clientAddress == null && clientPort == 0) {
+            System.out.println("Aguardando um cliente para enviar a mensagem: "+message);
+            while(clientAddress == null && clientPort == 0);
+        }
+        DatagramPacket packet = new DatagramPacket(message.getBytes(), message.length(),
+                  clientAddress, clientPort);
         try {
-            socket = new DatagramSocket(serverPort);
-            System.out.println("Servidor iniciado. Aguardando mensagens...");
-            executarRecepcao();
-        } catch (SocketException e) {
-            System.out.println("Socket: " + e.getMessage());
+            socket.send(packet);
+        } catch (IOException ex) {
+            Logger.getLogger(UDPServer.class.getName()).log(Level.SEVERE, null, ex);
         }
+        System.out.println("Mensagem enviada ao cliente: " + message);
     }
-
-    private void executarRecepcao() {
-        // Thread para receber mensagens
-        Thread receiveThread = new Thread(() -> {
-            byte[] buffer = new byte[1000];
-            try {
-                while (true) {
-                    DatagramPacket request = new DatagramPacket(buffer, buffer.length);
-                    socket.receive(request); // Recebe mensagens do cliente
-                    mensagem = new String(request.getData(), 0, request.getLength());
-                    System.out.println("\nMensagem recebida do cliente: " + mensagem);
-
-                    // Armazena o endereço e porta do cliente na primeira conexão
-                    if (clientAddress == null || clientPort == 0) {
-                        clientAddress = request.getAddress();
-                        clientPort = request.getPort();
-                    }
-                }
-            } catch (IOException e) {
-                System.out.println("Erro de E/S na recepção: " + e.getMessage());
+    
+    public String receberMensagem() {
+        DatagramPacket request = new DatagramPacket(buffer, buffer.length);
+        
+        try {
+            socket.receive(request); // Bloqueia até receber uma mensagem do cliente
+            String message = new String(request.getData(), 0, request.getLength());
+            // Armazena o endereço e a porta do cliente se for a primeira mensagem
+            if (clientAddress == null && clientPort == 0) {
+                clientAddress = request.getAddress();
+                clientPort = request.getPort();
             }
-        });
-        receiveThread.start();
+            
+            System.out.println("Mensagem recebida do cliente: " + message);
+            return message;
+        } catch (IOException ex) {
+            Logger.getLogger(UDPServer.class.getName()).log(Level.SEVERE, null, ex);
+        }
+        return null;
     }
 
-    // Método público para enviar mensagens ao cliente
-    public void sendMessage(String message) {
-        if (clientAddress != null && clientPort != 0) {
-            try {
-                DatagramPacket packet = new DatagramPacket(message.getBytes(), message.length(), clientAddress, clientPort);
-                socket.send(packet);
-                System.out.println("Mensagem enviada ao cliente: " + message);
-            } catch (IOException e) {
-                System.out.println("Erro ao enviar mensagem: " + e.getMessage());
-            }
-        } else {
-            System.out.println("Cliente não conectado. Não é possível enviar mensagem.");
-        }
-    }
+    @Override
+    public void run() {
+//        try {
+//            socket = new DatagramSocket(4872); // Porta do servidor
+//        buffer = new byte[1000];
 
-    // Fecha o socket quando o servidor for encerrado
-    public void close() {
-        if (socket != null && !socket.isClosed()) {
-            socket.close();
-        }
+        // Thread para receber mensagens do cliente
+//            Thread receiveThread = new Thread(() -> {
+//                try {
+//                    while (true) {
+//                        DatagramPacket request = new DatagramPacket(buffer, buffer.length);
+//                        socket.receive(request); // Recebe mensagens do cliente
+//                        String message = new String(request.getData(), 0, request.getLength());
+//                        System.out.println("\n" + message);
+//
+//                        // Armazena o endereço e a porta do cliente
+//                        clientAddress = request.getAddress();
+//                        clientPort = request.getPort();
+//
+//                        // Envia resposta de confirmação ao cliente
+//                        String replyMessage = "Mensagem recebida: " + message;
+//                        DatagramPacket reply = new DatagramPacket(replyMessage.getBytes(), replyMessage.length(),
+//                                  clientAddress, clientPort);
+//                        socket.send(reply);
+//                    }
+//                } catch (IOException e) {
+//                    System.out.println("Erro de E/S: " + e.getMessage());
+//                }
+//            });
+//
+//            // Inicializa a thread para receber mensagens
+//            receiveThread.start();
+        // Permite que o servidor também envie mensagens ao cliente
+//            Scanner scanner = new Scanner(System.in);
+//            while (true) {
+//                System.out.print("\n");
+//                String message = scanner.nextLine();
+//
+//                // Verifica se o cliente foi definido antes de enviar
+//                if (clientAddress != null && clientPort != 0) {
+//                    DatagramPacket packet = new DatagramPacket(message.getBytes(), message.length(),
+//                              clientAddress, clientPort);
+//                    socket.send(packet);
+//                    System.out.println("Mensagem enviada ao cliente: " + message);
+//                } else {
+//                    System.out.println("Aguardando um cliente para enviar mensagens...");
+//                }
+//            }
+//        } catch (SocketException e) {
+//            System.out.println("Erro no Socket: " + e.getMessage());
+//        } catch (IOException e) {
+//            System.out.println("Erro de E/S: " + e.getMessage());
+//        } finally {
+//            System.out.println("JÁ TEM SERVIDOR");
+//        }
     }
 }
